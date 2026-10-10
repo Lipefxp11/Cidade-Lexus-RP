@@ -56,9 +56,7 @@ jobs:
 
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "JAVA_HOME=$JAVA_HOME"
-          test -d "$ANDROID_HOME"
-          test -d "$JAVA_HOME"
-          test -f "$HOME/debug.keystore"
+          ls -l "$HOME/debug.keystore"
       - name: Diagnose Android export
         run: |
           echo "===== GODOT ====="
