@@ -103,7 +103,7 @@ func _build_ui() -> void:
 		var b := Button.new()
 		b.text = labels[key]
 		b.custom_minimum_size = Vector2(90, 80)
-		b.set_anchors_preset(Control.PRESET_BOTTOM_LEFT if key != "run" else Control.PRESET_BOTTOM_RIGHT)
+		b.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		b.position = positions[key]
 		if key == "run":
 			b.position = Vector2(-155, -110)
