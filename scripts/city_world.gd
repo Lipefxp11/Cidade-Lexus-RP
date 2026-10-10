@@ -363,10 +363,12 @@ func _build_rolling_land(holder: Node3D, cell: Vector2i) -> void:
 			var step := 5.75
 			for ix in range(5):
 				for iz in range(5):
-					var ax := sx * (edge + ix * step)
-					var bx := sx * (edge + (ix + 1) * step)
-					var az := sz * (edge + iz * step)
-					var bz := sz * (edge + (iz + 1) * step)
+					# sx/sz are read from an untyped Array; make the coordinates explicitly float.
+					# Godot 4.4 refuses to infer these four types from Variant operands.
+					var ax: float = float(sx) * (edge + float(ix) * step)
+					var bx: float = float(sx) * (edge + float(ix + 1) * step)
+					var az: float = float(sz) * (edge + float(iz) * step)
+					var bz: float = float(sz) * (edge + float(iz + 1) * step)
 					var a := Vector3(ax, Geo.rolling_height(cell, Vector2(ax, az)), az)
 					var b := Vector3(bx, Geo.rolling_height(cell, Vector2(bx, az)), az)
 					var c := Vector3(ax, Geo.rolling_height(cell, Vector2(ax, bz)), bz)

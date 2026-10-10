@@ -23,6 +23,10 @@ assert 'DUQUE DE CAXIAS' in geo and 'CIDADE DE DEUS' in geo and 'ZONA NORTE' in 
 assert 'func _build_river_cell' in world and 'func _build_bridge_deck' in world
 assert 'func _build_bridge_approach' in world and 'func _build_tunnel_section' in world
 assert 'func _build_speed_bump' in world and 'func _build_rolling_land' in world
+# Godot 4.4 cannot infer float coordinates when `sx` / `sz` are Array Variants.
+for coord in ("ax", "bx", "az", "bz"):
+    assert re.search(rf"(?m)^\s*var {coord}: float =", world), f"{coord} deve ser float (erro GDScript)"
+
 assert 'create_trimesh_shape' in world and 'Visuals.box' in world
 assert 'shader_type spatial' in water and 'TIME' in water
 assert 'Geo.RIVER_START_Z' in map_code and 'Geo.TUNNEL_BEGIN_X' in map_code
