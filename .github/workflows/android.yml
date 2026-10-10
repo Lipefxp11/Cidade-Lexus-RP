@@ -59,6 +59,28 @@ jobs:
           test -d "$ANDROID_HOME"
           test -d "$JAVA_HOME"
           test -f "$HOME/debug.keystore"
+      - name: Diagnose Android export
+        run: |
+          echo "===== JAVA ====="
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+
+          echo "===== ANDROID SDK ====="
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          sdkmanager --list_installed
+
+          echo "===== GODOT ====="
+          godot --version
+
+          echo "===== EXPORT TEMPLATES ====="
+          ls -lah ~/.local/share/godot/export_templates/4.4.1.stable/
+
+          echo "===== KEYSTORE ====="
+          test -f "$HOME/debug.keystore" && echo "Keystore encontrada"
+
+          echo "===== EXPORT PRESET ====="
+          grep -E '^(name|platform|package/unique_name|keystore/debug)' export_presets.cfg | sed -E 's/(keystore/debug_password=).*/\\1[OCULTO]/'
+
       - name: Export Android APK
         run: |
           mkdir -p build
