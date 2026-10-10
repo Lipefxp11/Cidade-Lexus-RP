@@ -54,7 +54,9 @@ static func add_hill_terrain(holder: Node3D, dirt: Material) -> void:
 					var b := Vector2(sx * (9.0 + (ix + 1) * 3.4), sz * (9.0 + iz * 3.4))
 					var c := Vector2(sx * (9.0 + ix * 3.4), sz * (9.0 + (iz + 1) * 3.4))
 					var d := Vector2(sx * (9.0 + (ix + 1) * 3.4), sz * (9.0 + (iz + 1) * 3.4))
-					var is_ccw := sx * sz > 0.0
+					# Arrays de loops são Variant no GDScript 4.4: conversão explícita
+					# impede falha de inferência em exportação headless.
+					var is_ccw: bool = float(sx) * float(sz) > 0.0
 					if is_ccw:
 						_add_terrain_tri(surface, a, c, b)
 						_add_terrain_tri(surface, b, c, d)

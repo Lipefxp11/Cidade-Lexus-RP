@@ -27,6 +27,10 @@ assert 'func _build_speed_bump' in world and 'func _build_rolling_land' in world
 for coord in ("ax", "bx", "az", "bz"):
     assert re.search(rf"(?m)^\s*var {coord}: float =", world), f"{coord} deve ser float (erro GDScript)"
 
+# V21.2: impedir nova falha de tipagem no terreno dos morros.
+districts = (root / 'scripts/lexus_districts.gd').read_text()
+assert re.search(r'(?m)^\s*var is_ccw: bool\s*=\s*float\(sx\)\s*\*\s*float\(sz\)', districts), 'is_ccw deve ter tipo bool e converter os valores do loop'
+assert not re.search(r'(?m)^\s*var is_ccw\s*:=', districts), 'is_ccw nao pode depender de inferencia Variant'
 assert 'create_trimesh_shape' in world and 'Visuals.box' in world
 assert 'shader_type spatial' in water and 'TIME' in water
 assert 'Geo.RIVER_START_Z' in map_code and 'Geo.TUNNEL_BEGIN_X' in map_code
