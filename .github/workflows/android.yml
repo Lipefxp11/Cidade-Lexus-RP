@@ -27,7 +27,9 @@ jobs:
           fi
           echo "Using SDK manager: $SDKMANAGER"
           "$SDKMANAGER" --version
-          yes | "$SDKMANAGER" --licenses > /dev/null || test "${PIPESTATUS[1]}" -eq 0
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          set -o pipefail
           "$SDKMANAGER" --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
           test -f "$ANDROID_HOME/platforms/android-35/android.jar"
           test -d "$ANDROID_HOME/build-tools/35.0.0"
@@ -85,11 +87,21 @@ jobs:
           assert Path(java).is_dir(), 'Java SDK missing'
           assert Path(os.environ['LEXUS_KEYSTORE']).is_file(), 'Keystore missing'
           print('SDK, JDK, keystore and preset configured')
+          print('SDK:', sdk, 'JAVA:', java)
           PYCODE
+      - name: Check Android configuration
+        run: |
+          test -f "$HOME/.config/godot/editor_settings-4.4.tres"
+          grep 'export/android/android_sdk_path' "$HOME/.config/godot/editor_settings-4.4.tres"
+          grep 'export/android/java_sdk_path' "$HOME/.config/godot/editor_settings-4.4.tres"
+          grep 'keystore/debug=' export_presets.cfg | sed 's@=.*@=CONFIGURADO@'
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
+          test -f "$ANDROID_HOME/build-tools/35.0.0/aapt2"
       - name: Export Android APK
         run: |
           mkdir -p build
-          godot --headless --path . --export-debug Android build/CidadeLexus-debug.apk
+          godot --headless --path . --editor --quit
+          godot --headless --verbose --path . --export-debug Android build/CidadeLexus-debug.apk
           test -s build/CidadeLexus-debug.apk
       - name: Upload APK
         if: success()
