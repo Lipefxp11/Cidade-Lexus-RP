@@ -21,11 +21,33 @@ var last_imported_animation := ""
 var imported_parts: Dictionary = {}
 var imported_base: Dictionary = {}
 var official_model_active: bool = false
+var realistic_model_active: bool = false
+var realistic_anim_state: String = ""
+var realistic_height_offset: float = 0.0
 var official_weapon: Node3D
 var animation_time: float = 0.0
 var dead_pose: bool = false
+var skin_tone_index: int = 1
+var hair_style_index: int = 0
+var outfit_index: int = 0
+const SKIN_TONES = [
+	Color(0.42, 0.27, 0.20),
+	Color(0.67, 0.45, 0.32),
+	Color(0.83, 0.62, 0.46),
+	Color(0.96, 0.78, 0.65)
+]
+const HAIR_TONES = [
+	Color(0.12, 0.09, 0.07),
+	Color(0.29, 0.17, 0.11),
+	Color(0.76, 0.70, 0.59),
+	Color(0.10, 0.10, 0.13)
+]
 
 func _ready() -> void:
+	# V20: skinned model is OPTIONAL. The APK always bundles the original Lexus GLB.
+	# A user-owned, correctly licensed animated GLB can be added at this path.
+	if _try_realistic_character():
+		return
 	# The official playable character is packaged with the APK; no external download.
 	var model_path := "res://assets/models/character.glb"
 	if ResourceLoader.exists(model_path):
@@ -50,6 +72,7 @@ func _ready() -> void:
 				if imported_parts.has("LexusLeftLeg") and imported_parts.has("LexusRightLeg") and imported_parts.has("LexusHead"):
 					official_model_active = true
 					_setup_official_sidearm()
+					apply_appearance(outfit_index, skin_tone_index, hair_style_index)
 					return
 				# If import is incomplete, fall back instead of rendering a broken character.
 				remove_child(imported_model)
@@ -58,6 +81,87 @@ func _ready() -> void:
 				imported_parts.clear()
 				imported_base.clear()
 	build()
+
+func _try_realistic_character() -> bool:
+	# The CI workflow supplies this CC BY 4.0 model before the Godot import.
+	# When working offline without that asset, the V17 original remains usable.
+	var path := "res://assets/models/hero_realistic.glb"
+	if not ResourceLoader.exists(path):
+		return false
+	var packed := load(path) as PackedScene
+	if packed == null:
+		push_warning("V19: personagem realista existe mas não é uma cena GLB válida")
+		return false
+	var instance := packed.instantiate() as Node3D
+	if instance == null:
+		push_warning("V19: arquivo 3D não gerou Node3D")
+		return false
+
+	var skeletons: Array[Node] = instance.find_children("*", "Skeleton3D", true, false)
+	var anim_players: Array[Node] = instance.find_children("*", "AnimationPlayer", true, false)
+	if skeletons.is_empty() or anim_players.is_empty():
+		push_warning("V19: GLB sem Skeleton3D/AnimationPlayer; usando o boneco V17")
+		instance.free()
+		return false
+	var anim := anim_players[0] as AnimationPlayer
+	if anim.get_animation_list().is_empty():
+		push_warning("V19: GLB sem animações importadas; usando o boneco V17")
+		instance.free()
+		return false
+
+	imported_model = instance
+	imported_animation = anim
+	imported_model.name = "LexusHumanoRealista"
+	# +Z visual front convention for the external sample; game forward is -Z.
+	imported_model.rotation.y = PI
+	add_child(imported_model)
+	realistic_model_active = true
+	_play_realistic_clip(["idle", "look"], 1.0)
+	print("V19: personagem humano GLB com esqueleto e animações carregado")
+	return true
+
+func _select_realistic_clip(search_terms: Array) -> String:
+	if imported_animation == null:
+		return ""
+	var clips := imported_animation.get_animation_list()
+	for term in search_terms:
+		for clip in clips:
+			if term in String(clip).to_lower():
+				return String(clip)
+	# Prefer an idle over a random attack/intro loop.
+	if clips.size() > 0:
+		return String(clips[0])
+	return ""
+
+func _play_realistic_clip(terms: Array, speed_factor: float) -> void:
+	var wanted := _select_realistic_clip(terms)
+	if wanted == "" or imported_animation == null:
+		return
+	imported_animation.speed_scale = speed_factor
+	if realistic_anim_state != wanted or not imported_animation.is_playing():
+		imported_animation.play(wanted, 0.16)
+		realistic_anim_state = wanted
+
+func _animate_realistic(delta: float, speed_ratio: float, crouching: bool, aiming: bool, recoil: float, airborne: bool, defeated: bool) -> void:
+	if imported_model == null:
+		return
+	if defeated:
+		_play_realistic_clip(["death", "fall", "idle"], 1.0)
+	elif airborne:
+		_play_realistic_clip(["jump", "idle"], 1.0)
+	elif crouching:
+		_play_realistic_clip(["crouch", "walk", "idle"], 0.55)
+	elif speed_ratio > 1.12:
+		_play_realistic_clip(["run", "sprint", "walk"], 1.0)
+	elif speed_ratio > 0.08:
+		_play_realistic_clip(["walk", "run"], 1.0)
+	else:
+		_play_realistic_clip(["idle", "look", "walk"], 1.0)
+	# Aiming and firing remain supported by gameplay, but a proper weapon-specific
+	# skeletal animation is NOT available in the demo asset. Avoid deforming it.
+	var target_drop := -0.22 if crouching else 0.0
+	realistic_height_offset = lerpf(realistic_height_offset, target_drop, minf(1.0, delta * 9.0))
+	imported_model.position.y = realistic_height_offset
 
 func _setup_official_sidearm() -> void:
 	var right_hand := imported_parts.get("LexusRightHand") as Node3D
@@ -135,6 +239,9 @@ func build() -> void:
 	Visuals.sphere(leg_r, Vector3(0, -0.81, -0.05), Vector3(0.38, 0.18, 0.54), shoe)
 
 func update_pose(delta: float, speed_ratio: float, crouching: bool, aiming: bool, recoil: float = 0.0, airborne: bool = false, defeated: bool = false) -> void:
+	if realistic_model_active:
+		_animate_realistic(delta, speed_ratio, crouching, aiming, recoil, airborne, defeated)
+		return
 	if official_model_active:
 		_animate_official(delta, speed_ratio, crouching, aiming, recoil, airborne, defeated)
 		return
@@ -247,3 +354,82 @@ func _animate_official(delta: float, speed_ratio: float, crouching: bool, aiming
 
 func set_skin(color: Color) -> void:
 	body_skin = color
+
+# Loja de skins: altera apenas roupas do modelo original, sem recolorir rosto/pele.
+func set_outfit(style: int) -> void:
+	var selected := clampi(style, 0, 2)
+	var shirt_color := Color(0.08, 0.10, 0.13)
+	var trousers_color := Color(0.08, 0.13, 0.23)
+	match selected:
+		1:
+			shirt_color = Color(0.58, 0.065, 0.10)
+			trousers_color = Color(0.10, 0.11, 0.13)
+		2:
+			shirt_color = Color(0.12, 0.20, 0.26)
+			trousers_color = Color(0.11, 0.15, 0.19)
+	if realistic_model_active:
+		# Do not overwrite high-resolution cloth/skin maps in the demo GLB.
+		# A matching wardrobe rig is necessary for genuine outfit replacement.
+		return
+	if official_model_active and imported_model != null:
+		for node in imported_model.find_children("*", "MeshInstance3D", true, false):
+			var mesh_node := node as MeshInstance3D
+			if mesh_node == null:
+				continue
+			var node_name := mesh_node.name.to_lower()
+			var chosen_color: Color
+			if "urban_shirt" in node_name or "upper_chest" in node_name:
+				chosen_color = shirt_color
+			elif "tailored_hips" in node_name or "thigh" in node_name or "_shin" in node_name or "cargo_pocket" in node_name:
+				chosen_color = trousers_color
+			else:
+				continue
+			var replacement := StandardMaterial3D.new()
+			replacement.albedo_color = chosen_color
+			replacement.roughness = 0.82
+			mesh_node.material_override = replacement
+	elif chest != null and hips != null:
+		# Fallback: mantém roupa diferente mesmo se a importação GLB falhar.
+		for visual in chest.find_children("*", "MeshInstance3D", true, false):
+			var mesh_node := visual as MeshInstance3D
+			if mesh_node != null and mesh_node.material_override != null:
+				var mat := mesh_node.material_override.duplicate() as StandardMaterial3D
+				if mat != null:
+					mat.albedo_color = shirt_color
+					mesh_node.material_override = mat
+
+# V20 — visual customization in the built-in GLB. Does not modify eyes/teeth/clothing accessories.
+# A third-party skinned model keeps its own PBR textures until it has a compatible wardrobe.
+func apply_appearance(outfit: int, skin_tone: int, hair_tone: int) -> void:
+	outfit_index = clampi(outfit, 0, 2)
+	skin_tone_index = clampi(skin_tone, 0, SKIN_TONES.size() - 1)
+	hair_style_index = clampi(hair_tone, 0, HAIR_TONES.size() - 1)
+	if realistic_model_active:
+		return
+	set_outfit(outfit_index)
+	if official_model_active and imported_model != null:
+		for item in imported_model.find_children("*", "MeshInstance3D", true, false):
+			var part := item as MeshInstance3D
+			if part == null:
+				continue
+			var nm := part.name.to_lower()
+			var color := Color.WHITE
+			var tint := false
+			if "hair" in nm or "curl_" in nm or "brow_" in nm:
+				color = HAIR_TONES[hair_style_index]
+				tint = true
+			elif "face_" in nm or "jaw" in nm or "nose_" in nm or "cheek_" in nm or "neck" in nm or "ear_" in nm or "upper_arm" in nm or "forearm" in nm or "hand_shape" in nm or "finger_" in nm:
+				# Avoid recoloring tattoos and shirt geometry.
+				if "tattoo" not in nm and "seam" not in nm:
+					color = SKIN_TONES[skin_tone_index]
+					tint = true
+			if tint:
+				var mat := StandardMaterial3D.new()
+				mat.albedo_color = color
+				mat.roughness = 0.86
+				part.material_override = mat
+	elif head != null:
+		body_skin = SKIN_TONES[skin_tone_index]
+
+func has_skinned_human() -> bool:
+	return realistic_model_active

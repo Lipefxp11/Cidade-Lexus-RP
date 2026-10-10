@@ -1,0 +1,21 @@
+CIDADE LEXUS RP V21 — ROTA PRINCIPAL
+
+   [ DUQUE DE CAXIAS — CENTRO ]   X=0 Z=0
+                |
+                |  Avenida em direção a Z positivo
+                v
+   [ ENTRADA DA PONTE ]           X=0 Z=260
+                |
+          ~~~~ PONTE ~~~~         Z=280 a 440
+                |
+   [ CIDADE DE DEUS ]            X=0 Z=560
+                |
+                +-----------> Avenida para leste (Z=560)
+                                    |
+                              [ TÚNEL ]  X=520 a 760
+                                    |
+                              [ ZONA NORTE ] X=850 Z=560
+
+Comandos: /gps, /duque, /cdd, /zonanorte, /clima 1 (NOITE), /clima 2 (DIA), /clima auto, /tempo chuva
+
+MAPA ESQUEMÁTICO DO JOGO, não é o mapa oficial de GTA V ou mapa real de ruas do RJ.

@@ -1,4 +1,4 @@
-name: Cidade Lexus RP - Android APK
+name: Cidade Lexus RP V21 - Tres Cidades Android Build
 
 on:
   push:
@@ -46,6 +46,9 @@ jobs:
       - name: Create debug signing key
         run: |
           keytool -genkeypair -noprompt -keystore "$RUNNER_TEMP/lexus-debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Cidade Lexus,O=Development,C=BR'
+      - name: V18 static project validation
+        run: |
+          python3 tests/v18_static_check.py
       - name: Verify landscape settings and script syntax
         run: |
           set -e
@@ -71,6 +74,14 @@ jobs:
             echo 'Foi encontrado erro de parser GDScript. Veja script_check.log.'
             exit 1
           fi
+      - name: Confirm self-contained official character
+        run: |
+          set -e
+          test -s assets/models/character.glb
+          python3 tests/v20_static_check.py
+      - name: Validate three-city map and weather V21
+        run: |
+          python3 tests/v21_static_check.py
       - name: Import Godot project
         run: |
           set -o pipefail
@@ -83,6 +94,14 @@ jobs:
         run: |
           set -o pipefail
           godot --headless --path . --script res://tests/v16_input_smoke.gd 2>&1 | tee build/logs/v16_input_smoke.log
+      - name: V20 character customization and GPS smoke test
+        run: |
+          set -o pipefail
+          godot --headless --path . --script res://tests/v20_avatar_gps_smoke.gd 2>&1 | tee build/logs/v20_avatar_gps_smoke.log
+          if grep -Eiq 'V20 SMOKE ERROR|SCRIPT ERROR|Parse Error|Failed to load script' build/logs/v20_avatar_gps_smoke.log; then
+            echo 'V20 character or GPS smoke failed. Inspect v20_avatar_gps_smoke.log.'
+            exit 1
+          fi
       - name: Validate Lexus official 3D character
         run: |
           set -o pipefail
@@ -90,6 +109,22 @@ jobs:
           godot --headless --path . --script res://tests/v17_character_smoke.gd 2>&1 | tee build/logs/v17_character.log
           if grep -Eiq 'SCRIPT ERROR|Parse Error|Failed to load script|V17 character:' build/logs/v17_character.log; then
             echo 'O modelo oficial nao carregou corretamente. Verifique v17_character.log.'
+            exit 1
+          fi
+      - name: Validate V18 favela, vehicle and interaction systems
+        run: |
+          set -o pipefail
+          godot --headless --path . --script res://tests/v18_system_smoke.gd 2>&1 | tee build/logs/v18_system_smoke.log
+          if grep -Eiq 'SCRIPT ERROR|Parse Error|V18 SYSTEM ERROR|Failed to load script' build/logs/v18_system_smoke.log; then
+            echo 'V18 systems failed smoke test.'
+            exit 1
+          fi
+      - name: Smoke test V21 bridge, tunnel, water, climate and minimap
+        run: |
+          set -o pipefail
+          godot --headless --path . --script res://tests/v21_world_smoke.gd 2>&1 | tee build/logs/v21_world_smoke.log
+          if grep -Eiq 'V21 WORLD ERROR|SCRIPT ERROR|Parse Error|Failed to load script|Invalid call' build/logs/v21_world_smoke.log; then
+            echo 'V21 world or climate smoke failed. Inspect log.'
             exit 1
           fi
       - name: Smoke test boot menu (headless)
@@ -153,19 +188,19 @@ jobs:
         run: |
           mkdir -p build
           godot --headless --path . --editor --quit
-          godot --headless --verbose --path . --export-debug Android build/CidadeLexus-V17-debug.apk
-          test -s build/CidadeLexus-V17-debug.apk
+          godot --headless --verbose --path . --export-debug Android build/CidadeLexus-V21-debug.apk
+          test -s build/CidadeLexus-V21-debug.apk
       - name: Upload Godot diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: CidadeLexus-V17-logs
+          name: CidadeLexus-V21-logs
           path: build/logs/*.log
           if-no-files-found: warn
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: CidadeLexus-V17-Android-APK
-          path: build/CidadeLexus-V17-debug.apk
+          name: CidadeLexus-V21-Android-APK
+          path: build/CidadeLexus-V21-debug.apk
           if-no-files-found: error

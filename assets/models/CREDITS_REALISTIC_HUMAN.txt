@@ -1,0 +1,6 @@
+Character sample: "Old Man" by Bake3D (https://bake3d.ai), CC BY 4.0
+License: https://creativecommons.org/licenses/by/4.0/
+Source model: https://bake3d.ai/samples/free/bake3d-person-animated.glb
+Use: prototype character for Cidade Lexus RP V19, imported without modification.
+This model depicts an older man and is a temporary realism proof-of-concept.
+Replace with a licensed young human character for final release.

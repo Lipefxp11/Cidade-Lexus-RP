@@ -19,6 +19,17 @@ func _check() -> void:
 	var body = humanoid_script.new()
 	root.add_child(body)
 	await process_frame
+	if body.realistic_model_active:
+		if body.imported_animation == null:
+			printerr("V19 character: realistic model missing animation player")
+			quit(1)
+			return
+		body.update_pose(0.016, 0.0, false, false)
+		body.update_pose(0.016, 1.3, false, false)
+		body.update_pose(0.016, 0.4, true, false)
+		print("V19 character smoke OK: real human, skinned GLB, animation clips")
+		quit(0)
+		return
 	if not body.official_model_active:
 		printerr("V17 character: Lexus Urbano 01 was not selected as the default model")
 		quit(1)
