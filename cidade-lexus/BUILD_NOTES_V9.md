@@ -1,1 +1,0 @@
-Cidade Lexus RP V9: corrigido tratamento de licencas SDK, reimportacao do editor apos configuracao, validacoes de SDK e diagnosticos. O APK ainda precisa ser compilado no GitHub Actions; compilacao nao foi executada neste ambiente.
