@@ -75,7 +75,7 @@ jobs:
         run: |
           mkdir -p build
           godot --headless --path . --editor --quit
-          godot --headless --path . --export-debug Android build/CidadeLexus-debug.apk
+          godot --headless --verbose --path . --export-debug Android build/CidadeLexus-debug.apk
 
       - name: Upload APK
         if: always()
