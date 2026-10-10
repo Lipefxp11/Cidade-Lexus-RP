@@ -1,39 +1,49 @@
-name: Android APK (prototype)
+name: Cidade Lexus Android APK
+
 on:
   workflow_dispatch:
   push:
     branches: [main]
+
 jobs:
   export:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
-      - name: Install Android SDK packages
-        run: sdkmanager 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0'
-      - name: Install Godot and export templates
+
+      - name: Install Godot
         run: |
           wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
           unzip -q Godot_v4.4.1-stable_linux.x86_64.zip
           sudo mv Godot_v4.4.1-stable_linux.x86_64 /usr/local/bin/godot
-          chmod +x /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+
           wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz
+
           mkdir -p ~/.local/share/godot/export_templates/4.4.1.stable
+          mkdir -p /tmp/godot-templates
+
           unzip -q Godot_v4.4.1-stable_export_templates.tpz -d /tmp/godot-templates
           cp /tmp/godot-templates/templates/* ~/.local/share/godot/export_templates/4.4.1.stable/
-      - name: Create debug signing key
+
+      - name: Generate Android debug keystore
         run: |
-          keytool -genkeypair -v -keystore "$HOME/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Android Debug,O=Cidade Lexus,C=BR'
-      - name: Configure Godot Android export paths
+          keytool -genkeypair -noprompt -keystore "$HOME/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Cidade Lexus,O=Development,C=BR"
+
+      - name: Configure Android export
         run: |
           mkdir -p ~/.config/godot
-          cat > ~/.config/godot/editor_settings-4.4.tres <<SETTINGS
+          cat > ~/.config/godot/editor_settings-4.4.tres <<EOF
           [gd_resource type="EditorSettings" format=3]
 
           [resource]
@@ -41,13 +51,36 @@ jobs:
           export/android/debug_keystore = "$HOME/debug.keystore"
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
-          SETTINGS
-      - name: Export APK
+          EOF
+
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          p = Path("export_presets.cfg")
+          s = p.read_text()
+          import re
+          for key, value in {
+              "keystore/debug": "/home/runner/debug.keystore",
+              "keystore/debug_user": "androiddebugkey",
+              "keystore/debug_password": "android",
+          }.items():
+              s = re.sub(
+                  rf"(?m)^{re.escape(key)}=.*$",
+                  f'{key}="{value}"',
+                  s
+              )
+          p.write_text(s)
+          PYCODE
+
+      - name: Export Android APK
         run: |
           mkdir -p build
           godot --headless --path . --editor --quit
           godot --headless --path . --export-debug Android build/CidadeLexus-debug.apk
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: CidadeLexus-Android-debug
+          name: CidadeLexus-Android
           path: build/*.apk
+          if-no-files-found: warn
