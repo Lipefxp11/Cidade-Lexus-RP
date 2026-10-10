@@ -21,6 +21,7 @@ var jump_request := false
 var input_direction := Vector2.ZERO
 var facing_yaw: float = PI
 var walk_intensity: float = 0.0
+var shoot_recoil := 0.0
 
 func _ready() -> void:
 	collision_layer = 2
@@ -41,6 +42,10 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector3.ZERO
 		return
 	is_crouching = crouch_held
+	var body_capsule := shape_node.shape as CapsuleShape3D
+	var capsule_height := 1.30 if is_crouching else 1.85
+	body_capsule.height = move_toward(body_capsule.height, capsule_height, delta * 4.0)
+	shape_node.position.y = body_capsule.height * 0.5
 	is_running = run_held and not crouch_held and stamina > 2.0 and input_direction.length() > 0.2
 	var speed := CROUCH_SPEED if is_crouching else (RUN_SPEED if is_running else WALK_SPEED)
 	var front := Vector3(-sin(facing_yaw), 0, -cos(facing_yaw))
@@ -57,18 +62,19 @@ func _physics_process(delta: float) -> void:
 			velocity.y = 8.0
 	jump_request = false
 	move_and_slide()
-	global_position.x = clampf(global_position.x, -182.0, 182.0)
-	global_position.z = clampf(global_position.z, -182.0, 182.0)
 
 	if move_dir.length() > 0.05:
 		rotation.y = lerp_angle(rotation.y, atan2(-move_dir.x, -move_dir.z), minf(1.0, delta * 12.0))
+	elif aim_held:
+		rotation.y = lerp_angle(rotation.y, facing_yaw, minf(1.0, delta * 12.0))
 	walk_intensity = lerpf(walk_intensity, move_dir.length() * (1.45 if is_running else 1.0), minf(1.0, delta * 10))
 	if is_running:
 		stamina = maxf(0.0, stamina - delta * 15.0)
 	else:
 		stamina = minf(100.0, stamina + delta * 10.0)
+	shoot_recoil = move_toward(shoot_recoil, 0.0, delta * 7.0)
 	if visual:
-		visual.update_pose(delta, walk_intensity, is_crouching, aim_held)
+		visual.update_pose(delta, walk_intensity, is_crouching, aim_held, shoot_recoil, not is_on_floor())
 
 func set_look_yaw(value: float) -> void:
 	facing_yaw = value
@@ -79,6 +85,8 @@ func receive_damage(amount: float) -> bool:
 	health = maxf(0.0, health - amount)
 	if health <= 0:
 		is_dead = true
+		if visual != null:
+			visual.update_pose(0.2, 0.0, false, false, 0.0, false, true)
 		return true
 	return false
 
@@ -93,6 +101,8 @@ func revive() -> void:
 	global_position = Vector3(0, 0.15, 12)
 	velocity = Vector3.ZERO
 	visible = true
+	if visual != null:
+		visual.update_pose(0.3, 0.0, false, false, 0.0, false, false)
 	shape_node.set_deferred("disabled", false)
 
 func enter_vehicle() -> void:
@@ -106,3 +116,6 @@ func exit_vehicle(exit_pos: Vector3) -> void:
 	velocity = Vector3.ZERO
 	visible = true
 	shape_node.set_deferred("disabled", false)
+
+func play_shoot_recoil() -> void:
+	shoot_recoil = 1.0

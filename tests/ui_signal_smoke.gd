@@ -8,7 +8,7 @@ func _initialize() -> void:
 func _check_menu() -> void:
 	var ui_script = load("res://scripts/lexus_ui.gd")
 	if ui_script == null:
-		printerr("V15 UI test: lexus_ui.gd unavailable")
+		printerr("V16 UI test: lexus_ui.gd unavailable")
 		quit(1)
 		return
 	var ui = ui_script.new()
@@ -18,15 +18,15 @@ func _check_menu() -> void:
 	var settings: Button = ui.menu.get_node_or_null("MenuCard/SettingsButton") as Button
 	var selector: OptionButton = ui.menu.get_node_or_null("MenuCard/ServerSelector") as OptionButton
 	if play == null or settings == null or selector == null:
-		printerr("V15 UI test: a menu button or server selector is missing")
+		printerr("V16 UI test: a menu button or server selector is missing")
 		quit(1)
 		return
 	if ui.menu.mouse_filter != Control.MOUSE_FILTER_PASS:
-		printerr("V15 UI test: menu root mouse filter is incorrect")
+		printerr("V16 UI test: menu root mouse filter is incorrect")
 		quit(1)
 		return
 	if not Input.emulate_mouse_from_touch:
-		printerr("V15 UI test: Android touch-to-mouse emulation is disabled")
+		printerr("V16 UI test: Android touch-to-mouse emulation is disabled")
 		quit(1)
 		return
 	var received: Array[String] = []
@@ -34,12 +34,12 @@ func _check_menu() -> void:
 	play.pressed.emit()
 	settings.pressed.emit()
 	if received != ["PLAY", "SETTINGS"]:
-		printerr("V15 UI test: actions were not emitted: ", received)
+		printerr("V16 UI test: actions were not emitted: ", received)
 		quit(1)
 		return
 	if selector.item_count != 1:
-		printerr("V15 UI test: unexpected nonfunctional server choices")
+		printerr("V16 UI test: unexpected nonfunctional server choices")
 		quit(1)
 		return
-	print("V15 UI test OK: PLAY and SETTINGS connected; touch emulation enabled")
+	print("V16 UI test OK: PLAY and SETTINGS connected; touch emulation enabled")
 	quit(0)

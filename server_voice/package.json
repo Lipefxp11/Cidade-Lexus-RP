@@ -1,0 +1,9 @@
+{
+  "name": "cidade-lexus-voice-dev",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Experimental voice relay for Godot development only, not production-ready",
+  "scripts": {"start": "node server.js"},
+  "dependencies": {"ws": "^8.18.0"},
+  "engines": {"node": ">=20"}
+}

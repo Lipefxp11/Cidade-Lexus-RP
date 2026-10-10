@@ -1,6 +1,6 @@
 extends Node3D
 
-# CIDADE LEXUS RP V15 — interface touchscreen revisada / demo offline.
+# CIDADE LEXUS RP V16 — gameplay e input revisados / demo offline.
 # Gameplay remains local until an authoritative multiplayer backend exists.
 const WorldScript = preload("res://scripts/city_world.gd")
 const PlayerScript = preload("res://scripts/lexus_player.gd")
@@ -8,6 +8,8 @@ const VehicleScript = preload("res://scripts/lexus_vehicle.gd")
 const NPCScript = preload("res://scripts/lexus_npc.gd")
 const UIScript = preload("res://scripts/lexus_ui.gd")
 const ConfigPath = "user://lexus_v13.cfg"
+const VoiceScript = preload("res://scripts/lexus_voice.gd")
+const VOICE_SERVER_URL = "" # ex.: wss://seu-servidor-de-voz.example"
 
 enum GameState { BOOT, MENU, LOADING, PLAYING, DEAD }
 
@@ -25,7 +27,17 @@ var npcs: Array = []
 var active_car
 var camera_yaw: float = 0.0
 var camera_pitch: float = 0.0
-var camera_distance: float = 7.0
+var camera_distance: float = 3.55
+var camera_shoulder: float = 0.50
+var camera_collision_query: PhysicsRayQueryParameters3D
+var fire_held := false
+var weapon_recoil := 0.0
+var session_hour := 12.0
+var voice
+var staff_demo := false
+var voice_server_url := VOICE_SERVER_URL
+var shot_player: AudioStreamPlayer
+var reload_player: AudioStreamPlayer
 var camera_sensitivity: float = 1.0
 var free_camera_touch_id: int = -1
 var mouse_look := false
@@ -67,8 +79,14 @@ func _ready() -> void:
 	ui.command_entered.connect(_on_chat_command)
 	ui.quality_changed.connect(_on_quality_changed)
 	ui.sensitivity_changed.connect(_on_sensitivity_changed)
+	ui.voice_url_changed.connect(_on_voice_url_changed)
 	ui.update_settings(quality_level, camera_sensitivity)
+	ui.update_voice_url(voice_server_url)
 	ui.set_screen("loading")
+	voice = VoiceScript.new()
+	voice.name = "VozExperimental"
+	add_child(voice)
+	voice.status_changed.connect(_on_voice_status)
 	state = GameState.BOOT
 	loading_progress = 0.0
 	status_label = "Preparando Cidade Lexus RP"
@@ -107,12 +125,21 @@ func _make_game_world() -> void:
 		npcs.append(bot)
 
 	camera = Camera3D.new()
-	camera.fov = 75.0
+	camera.fov = 67.0
 	camera.current = true
 	game_root.add_child(camera)
-	camera.global_position = Vector3(0, 2.9, 19.0)
-	camera.look_at(player.global_position + Vector3(0, 2.1, -15.0), Vector3.UP)
+	camera.global_position = Vector3(0.5, 2.6, 15.0)
+	camera.look_at(player.global_position + Vector3(0, 1.45, 0), Vector3.UP)
 	city.set_quality(quality_level)
+	city.set_time(session_hour)
+	shot_player = AudioStreamPlayer.new()
+	shot_player.stream = load("res://assets/audio/disparo_demo.wav")
+	shot_player.volume_db = -7.0
+	game_root.add_child(shot_player)
+	reload_player = AudioStreamPlayer.new()
+	reload_player.stream = load("res://assets/audio/recarga_demo.wav")
+	reload_player.volume_db = -8.0
+	game_root.add_child(reload_player)
 
 
 func _finish_world_load() -> void:
@@ -149,6 +176,7 @@ func _process(delta: float) -> void:
 	if state != GameState.PLAYING:
 		return
 
+	weapon_recoil = maxf(0.0, weapon_recoil - delta * 5.0)
 	shoot_cooldown = maxf(0.0, shoot_cooldown - delta)
 	if reload_time > 0:
 		reload_time -= delta
@@ -162,11 +190,8 @@ func _process(delta: float) -> void:
 		player.input_direction = _get_move_input()
 		player.run_held = run_enabled
 		player.crouch_held = is_crouched
-		player.aim_held = shot_requested
+		player.aim_held = fire_held or weapon_recoil > 0.05
 
-	if shot_requested:
-		shot_requested = false
-		_fire_weapon()
 	if player.is_dead:
 		return
 	for npc in npcs:
@@ -195,6 +220,9 @@ func _physics_process(delta: float) -> void:
 		player.global_position = active_car.global_position
 		if active_car.fuel <= 0:
 			active_car.engine_on = false
+	elif (fire_held or shot_requested) and shoot_cooldown <= 0.0:
+		_fire_weapon()
+	shot_requested = false
 
 func _unhandled_input(event: InputEvent) -> void:
 	if state != GameState.PLAYING:
@@ -221,6 +249,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
+		if not key_event.pressed and key_event.keycode == KEY_Q:
+			fire_held = false
 		if key_event.pressed and not key_event.echo:
 			match key_event.keycode:
 				KEY_SPACE:
@@ -241,7 +271,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				KEY_ESCAPE:
 					_open_menu()
 				KEY_Q:
-					shot_requested = true
+					fire_held = true
 
 func _move_camera(relative: Vector2) -> void:
 	camera_yaw -= relative.x * camera_sensitivity * 0.0048
@@ -262,12 +292,14 @@ func _get_move_input() -> Vector2:
 func _update_camera(delta: float) -> void:
 	var target: Vector3
 	if active_car != null:
-		target = active_car.global_position + Vector3(0, 1.65, 0)
+		target = active_car.global_position + Vector3(0, 1.55, 0)
 	else:
-		target = player.global_position + Vector3(0, 1.48 if not is_crouched else 1.1, 0)
-	var d := camera_distance + (1.2 if active_car != null else 0.0)
-	var offset := Vector3(sin(camera_yaw) * d, 1.25 + camera_pitch * 4.4, cos(camera_yaw) * d)
-	var desired := target + offset
+		target = player.global_position + Vector3(0, 1.45 if not is_crouched else 1.12, 0)
+	# Camera like GTA SA: shoulder slightly right, 3.55m behind player.
+	var d := 5.05 if active_car != null else camera_distance
+	var behind := Vector3(sin(camera_yaw), 0.0, cos(camera_yaw))
+	var shoulder := Vector3(cos(camera_yaw), 0, -sin(camera_yaw)) * (0.0 if active_car != null else camera_shoulder)
+	var desired := target + behind * d + shoulder + Vector3(0, 0.55 + camera_pitch * 2.6 + weapon_recoil * 0.14, 0)
 	# Camera collision prevents walls from hiding the character.
 	var space := get_world_3d().direct_space_state
 	var ray := PhysicsRayQueryParameters3D.new()
@@ -280,9 +312,8 @@ func _update_camera(delta: float) -> void:
 	var t := clampf(delta * 9.0, 0.0, 1.0)
 	camera.global_position = camera.global_position.lerp(desired, t)
 	if camera.global_position.distance_to(target) > 0.05:
-		# Look ahead so the center reticle can hit targets instead of aiming at our own head.
 		var forward := Vector3(-sin(camera_yaw), 0, -cos(camera_yaw))
-		var aim_point := target + forward * 15.0 + Vector3(0, 0.65, 0)
+		var aim_point := target + forward * 26.0 + Vector3(0, camera_pitch * -7.0, 0)
 		camera.look_at(aim_point, Vector3.UP)
 
 func _on_play_pressed() -> void:
@@ -304,7 +335,7 @@ func _start_playing() -> void:
 	state = GameState.PLAYING
 	_set_game_world_visible(true)
 	ui.set_screen("game")
-	ui.show_toast("Cidade Lexus RP V15 • DEMO OFFLINE")
+	ui.show_toast("Cidade Lexus RP V16 • DEMO OFFLINE")
 	_refresh_hud()
 
 func _set_game_world_visible(value: bool) -> void:
@@ -337,6 +368,17 @@ func _on_ui_action(action: String) -> void:
 				is_crouched = not is_crouched
 		"FIRE":
 			shot_requested = true
+		"FIRE_DOWN":
+			fire_held = true
+			shot_requested = true
+		"FIRE_UP":
+			fire_held = false
+		"VOICE_DOWN":
+			voice.start_transmission()
+		"VOICE_UP":
+			voice.stop_transmission()
+		"VOICE_CONNECT":
+			_toggle_voice()
 		"RELOAD":
 			_start_reload()
 		"INTERACT":
@@ -368,6 +410,8 @@ func _open_menu() -> void:
 	free_camera_touch_id = -1
 	joystick_vector = Vector2.ZERO
 	shot_requested = false
+	fire_held = false
+	voice.stop_transmission()
 	state = GameState.MENU
 	_set_game_world_visible(false)
 	ui.set_screen("menu")
@@ -407,6 +451,8 @@ func _interact() -> void:
 
 func _enter_car(car) -> void:
 	active_car = car
+	fire_held = false
+	shot_requested = false
 	active_car.driver_inside = true
 	active_car.engine_on = true
 	player.enter_vehicle()
@@ -432,12 +478,19 @@ func _fire_weapon() -> void:
 	if shoot_cooldown > 0.0 or reload_time > 0.0:
 		return
 	if ammo_in_clip <= 0:
+		shoot_cooldown = 0.60
 		ui.show_toast("Pente vazio • Toque em RECARGA")
 		return
-	shoot_cooldown = 0.28
+	shoot_cooldown = 0.23
 	ammo_in_clip -= 1
-	var origin := camera.global_position
-	var target := origin - camera.global_transform.basis.z * 80.0
+	weapon_recoil = 1.0
+	player.play_shoot_recoil()
+	_spawn_muzzle_flash()
+	if shot_player != null:
+		shot_player.play()
+	# Aim ray starts at the actual screen center, not at the shoulder.
+	var origin := camera.project_ray_origin(get_viewport().get_visible_rect().size * 0.5)
+	var target := origin + camera.project_ray_normal(get_viewport().get_visible_rect().size * 0.5) * 85.0
 	var query := PhysicsRayQueryParameters3D.new()
 	query.from = origin
 	query.to = target
@@ -447,7 +500,8 @@ func _fire_weapon() -> void:
 	var endpoint := target
 	if not result.is_empty():
 		endpoint = result["position"]
-	_spawn_tracer(origin, endpoint)
+	_spawn_tracer(player.global_position + Vector3(0, 1.35, 0), endpoint)
+	ui.flash_reticle(not result.is_empty())
 	if not result.is_empty():
 		var collider = result.get("collider")
 		if collider != null and npcs.has(collider):
@@ -483,12 +537,25 @@ func _spawn_tracer(start_point: Vector3, end_point: Vector3) -> void:
 	game_root.add_child(effect)
 	get_tree().create_timer(0.07).timeout.connect(effect.queue_free)
 
+func _spawn_muzzle_flash() -> void:
+	# Short flash at hand position; cosmetic only, with no physics collision.
+	var flash := OmniLight3D.new()
+	flash.light_color = Color(1.0, 0.69, 0.20)
+	flash.light_energy = 1.8
+	flash.omni_range = 3.0
+	flash.shadow_enabled = false
+	flash.position = player.global_position + Vector3(0, 1.37, 0) - player.global_transform.basis.z * 0.3 + player.global_transform.basis.x * 0.22
+	game_root.add_child(flash)
+	get_tree().create_timer(0.045).timeout.connect(flash.queue_free)
+
 func _start_reload() -> void:
 	if state != GameState.PLAYING or active_car != null or player.is_dead:
 		return
 	if reload_time > 0.0 or ammo_in_clip >= 12 or reserve_ammo <= 0:
 		return
 	reload_time = 1.8
+	if reload_player != null:
+		reload_player.play()
 	ui.show_toast("Recarregando arma...")
 
 func _finish_reload() -> void:
@@ -508,6 +575,9 @@ func _damage_player(amount: float) -> void:
 	if player.receive_damage(remaining):
 		state = GameState.DEAD
 		deaths += 1
+		fire_held = false
+		shot_requested = false
+		voice.stop_transmission()
 		ui.show_death()
 		ui.show_toast("Você foi incapacitado")
 		_save_profile()
@@ -521,6 +591,8 @@ func _revive_player() -> void:
 	armour = 0.0
 	is_crouched = false
 	run_enabled = false
+	fire_held = false
+	shot_requested = false
 	state = GameState.PLAYING
 	ui.hide_death()
 	ui.show_toast("Atendimento concluído • Revivido no hospital")
@@ -529,7 +601,7 @@ func _revive_player() -> void:
 func _show_inventory() -> void:
 	if state != GameState.PLAYING:
 		return
-	var info := "IDENTIDADE: CIDADÃO LEXUS\nDINHEIRO: R$ %d\nBANCO: R$ %d\nPISTOLA: 12 TIROS POR PENTE\nMUNIÇÃO: %d / %d\nKITS MÉDICOS: %d\nVIDA: %d\nCOLETE: %d\nELIMINAÇÕES: %d\nMORTES: %d\nEXPERIÊNCIA: %d XP\n\nTRABALHO: %s\n\nComandos RP: /ajuda, /rg, /saldo, /gps, /trabalho, /curar, /comprarmunicao" % [money, bank_money, ammo_in_clip, reserve_ammo, medkits, int(player.health), int(armour), eliminations, deaths, points, job_status]
+	var info := "IDENTIDADE: LEXUS URBANO 01\nDINHEIRO: R$ %d\nBANCO: R$ %d\nPISTOLA: 12 TIROS POR PENTE\nMUNIÇÃO: %d / %d\nKITS MÉDICOS: %d\nVIDA: %d\nCOLETE: %d\nELIMINAÇÕES: %d\nMORTES: %d\nEXPERIÊNCIA: %d XP\n\nTRABALHO: %s\n\nComandos RP: /ajuda, /rg, /saldo, /gps, /trabalho, /curar, /comprarmunicao" % [money, bank_money, ammo_in_clip, reserve_ammo, medkits, int(player.health), int(armour), eliminations, deaths, points, job_status]
 	ui.open_info(info)
 
 func _on_chat_command(line: String) -> void:
@@ -538,9 +610,9 @@ func _on_chat_command(line: String) -> void:
 	var command := line.to_lower().strip_edges()
 	match command:
 		"/ajuda":
-			ui.open_info("COMANDOS RP OFFLINE\n/rg  /saldo  /inventario  /gps\n/trabalho  /curar  /comprarmunicao\n/recarregar  /carro\n\nCONTROLES: joystick andar, deslize o dedo na área livre à direita para câmera 360°. USAR entra/sai do carro.\n\nTudo nesta V15 é demonstração local.")
+			ui.open_info("COMANDOS RP LOCAL\n/rg /saldo /inventario /gps /trabalho\n/curar /comprarmunicao /recarregar /carro\n/staffhelp /voz\n\nCÂMERA: arraste na região livre da direita.\nATIRAR: segure o botão. USAR: entrar/sair do carro.\n\nOffline: nenhum privilégio no servidor.")
 		"/rg":
-			ui.open_info("REGISTRO GERAL\nNome: Cidadão Lexus\nCidade: Cidade Lexus RP\nOcupação: Trabalhador\nNível: %d\nMultiplayer: NÃO CONECTADO" % int(points / 100 + 1))
+			ui.open_info("REGISTRO GERAL\nNome: Lexus Urbano 01\nCidade: Cidade Lexus RP\nOcupação: Trabalhador\nNível: %d\nMultiplayer: NÃO CONECTADO" % int(points / 100 + 1))
 		"/saldo":
 			ui.show_toast("CARTEIRA: R$ %d | BANCO: R$ %d" % [money, bank_money])
 		"/inventario", "/mochila":
@@ -569,8 +641,51 @@ func _on_chat_command(line: String) -> void:
 				_save_profile()
 			else:
 				ui.show_toast("Saldo insuficiente: precisa de R$ 50")
+		"/staffhelp":
+			ui.open_info("STAFF LOCAL — SOMENTE TESTES OFFLINE\n/staffmodo\n/staffcurar\n/stafftp X Z\n/staffcarro\n/staffhora HH\n\nNo futuro, comandos reais exigem autenticação e validação no servidor.")
+		"/staffmodo":
+			staff_demo = not staff_demo
+			ui.show_toast("Staff de demonstração %s" % ("ligado" if staff_demo else "desligado"))
+		"/staffcurar":
+			if not _check_staff_demo():
+				return
+			player.heal(100)
+			armour = 100
+			ui.show_toast("Vida e colete restaurados (offline)")
+		"/staffcarro":
+			if not _check_staff_demo():
+				return
+			var new_car = VehicleScript.new()
+			new_car.car_name = "Sedan de Staff — DEMO"
+			new_car.paint_color = Color(0.2, 0.25, 0.32)
+			new_car.position = player.global_position + Vector3(3.8, 0, -3.5)
+			game_root.add_child(new_car)
+			cars.append(new_car)
+			ui.show_toast("Carro de teste criado")
+		"/voz":
+			ui.show_toast("VoIP experimental: configure endereço e conecte no botão VOZ")
 		_:
-			if command.begins_with("/"):
+			if command.begins_with("/stafftp "):
+				if not _check_staff_demo():
+					return
+				var args := command.split(" ", false)
+				if args.size() != 3 or not args[1].is_valid_float() or not args[2].is_valid_float():
+					ui.show_toast("Uso: /stafftp X Z")
+					return
+				player.global_position = Vector3(float(args[1]), 0.45, float(args[2]))
+				city.ensure_chunk_at(player.global_position)
+				ui.show_toast("Teleporte offline concluído")
+			elif command.begins_with("/staffhora "):
+				if not _check_staff_demo():
+					return
+				var args := command.split(" ", false)
+				if args.size() != 2 or not args[1].is_valid_float():
+					ui.show_toast("Uso: /staffhora 0-23")
+					return
+				session_hour = clampf(float(args[1]), 0.0, 23.99)
+				city.set_time(session_hour)
+				ui.show_toast("Hora da demo alterada")
+			elif command.begins_with("/"):
 				ui.show_toast("Comando não encontrado • /ajuda")
 			else:
 				ui.show_toast("CHAT LOCAL (offline): %s" % line)
@@ -591,7 +706,8 @@ func _refresh_hud() -> void:
 	var speed := 0
 	if active_car != null:
 		speed = active_car.speed_kmh()
-	ui.update_hud(player.health, player.stamina, armour, money, location_text, ammo_in_clip, reserve_ammo, active_car != null, speed, job_status)
+	ui.update_hud(player.health, player.stamina, armour, money, location_text, ammo_in_clip, reserve_ammo, active_car != null, speed, job_status, active_car.fuel if active_car != null else 0.0)
+	ui.set_voice_status(voice.connection_label() if voice != null else "VOZ OFFLINE")
 	city.update_visibility(focus_pos)
 	var car_pts: Array = []
 	for car in cars:
@@ -614,6 +730,7 @@ func _load_profile() -> void:
 	eliminations = maxi(0, int(cfg.get_value("player", "kills", 0)))
 	deaths = maxi(0, int(cfg.get_value("player", "deaths", 0)))
 	quality_level = clampi(int(cfg.get_value("settings", "graphics", 1)), 0, 2)
+	voice_server_url = str(cfg.get_value("settings", "voice_server_url", VOICE_SERVER_URL))
 	camera_sensitivity = clampf(float(cfg.get_value("settings", "camera_sensitivity", 1.0)), 0.5, 2.4)
 
 func _save_profile() -> void:
@@ -626,6 +743,7 @@ func _save_profile() -> void:
 	cfg.set_value("player", "kills", eliminations)
 	cfg.set_value("player", "deaths", deaths)
 	cfg.set_value("settings", "graphics", quality_level)
+	cfg.set_value("settings", "voice_server_url", voice_server_url)
 	cfg.set_value("settings", "camera_sensitivity", camera_sensitivity)
 	var err := cfg.save(ConfigPath)
 	if err != OK:
@@ -633,3 +751,32 @@ func _save_profile() -> void:
 
 func _exit_tree() -> void:
 	_save_profile()
+
+func _check_staff_demo() -> bool:
+	if staff_demo and state == GameState.PLAYING:
+		return true
+	ui.show_toast("Ative /staffmodo para TESTE OFFLINE. Sem autorização online.")
+	return false
+
+func _on_voice_status(label: String) -> void:
+	if ui != null:
+		ui.set_voice_status(label)
+
+func _toggle_voice() -> void:
+	if voice == null:
+		return
+	if voice.is_connected_to_voice():
+		voice.disconnect_server()
+		return
+	if not (voice_server_url.begins_with("wss://") or voice_server_url.begins_with("ws://")):
+		ui.show_toast("VoIP: falta servidor. Configure VOICE_SERVER_URL em main.gd")
+		return
+	voice.connect_server(voice_server_url, "cidade_lexus_demo")
+
+func _on_voice_url_changed(value: String) -> void:
+	if value != "" and not (value.begins_with("wss://") or value.begins_with("ws://")):
+		ui.show_toast("Endereço VoIP deve começar por wss:// ou ws://")
+		return
+	voice_server_url = value
+	_save_profile()
+	ui.show_toast("Servidor de voz salvo" if value != "" else "Servidor de voz apagado")

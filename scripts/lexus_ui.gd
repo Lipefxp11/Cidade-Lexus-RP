@@ -3,6 +3,7 @@ extends CanvasLayer
 signal play_pressed
 signal quality_changed(level: int)
 signal sensitivity_changed(level: float)
+signal voice_url_changed(url: String)
 signal action_pressed(action: String)
 signal move_changed(direction: Vector2)
 signal command_entered(command: String)
@@ -30,6 +31,9 @@ var ammo_label: Label
 var speed_label: Label
 var job_label: Label
 var alert_label: Label
+var voice_label: Label
+var reticle_timer := 0.0
+var crosshair_label: Label
 var toast: Label
 var minimap
 var movement
@@ -37,6 +41,7 @@ var buttons: Dictionary = {}
 var toast_time := 0.0
 var quality_opt: OptionButton
 var mouse_opt: HSlider
+var voice_input: LineEdit
 var main_title: Label
 var server_opt: OptionButton
 var _last_size := Vector2.ZERO
@@ -60,6 +65,10 @@ func _process(delta: float) -> void:
 		toast_time -= delta
 		if toast_time <= 0.0:
 			toast.visible = false
+	if reticle_timer > 0.0:
+		reticle_timer -= delta
+		if reticle_timer <= 0.0 and crosshair_label != null:
+			crosshair_label.modulate = Color.WHITE
 
 func _root(interactive: bool = false) -> Control:
 	var root := Control.new()
@@ -111,7 +120,13 @@ func _button(parent: Control, label_text: String, rect: Rect2, action: String, h
 	b.add_theme_stylebox_override("pressed", _style(Color(0.35, 0.07, 0.11, 1.0)))
 	b.add_theme_stylebox_override("focus", _style(Color(0.0, 0.0, 0.0, 0.0), Color(1.0, 0.38, 0.38), 13))
 	parent.add_child(b)
-	if action != "":
+	if action == "FIRE":
+		b.button_down.connect(func(): action_pressed.emit("FIRE_DOWN"))
+		b.button_up.connect(func(): action_pressed.emit("FIRE_UP"))
+	elif action == "VOICE_PTT":
+		b.button_down.connect(func(): action_pressed.emit("VOICE_DOWN"))
+		b.button_up.connect(func(): action_pressed.emit("VOICE_UP"))
+	elif action != "":
 		b.pressed.connect(func(): action_pressed.emit(action))
 	return b
 
@@ -149,7 +164,7 @@ func _make_menu() -> Control:
 	card.name = "MenuCard"
 	_label(card, "CIDADE LEXUS RP", Rect2(27, 25, 462, 43), 29)
 	main_title = _label(card, "SUA CIDADE. SUA HISTÓRIA.", Rect2(27, 88, 460, 73), 29)
-	_label(card, "BRASIL  /  RIO DE JANEIRO  /  V15", Rect2(27, 180, 464, 27), 16)
+	_label(card, "BRASIL  /  RIO DE JANEIRO  /  V17", Rect2(27, 180, 464, 27), 16)
 	_label(card, "ESCOLHA O SERVIDOR", Rect2(27, 237, 462, 28), 16)
 
 	server_opt = OptionButton.new()
@@ -210,6 +225,7 @@ func _make_hud() -> Control:
 	ammo_label = _label(root, "PISTOLA • 12 / 60", Rect2(810, 60, 260, 33), 17)
 	speed_label = _label(root, "A PÉ", Rect2(810, 102, 270, 33), 18)
 	job_label = _label(root, "TRABALHO: DISPONÍVEL", Rect2(810, 144, 300, 33), 15)
+	voice_label = _label(root, "VOZ: OFFLINE", Rect2(810, 181, 300, 26), 16)
 	alert_label = _label(root, "", Rect2(420, 24, 380, 48), 22)
 	alert_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast = _label(root, "", Rect2(350, 95, 610, 55), 20)
@@ -229,6 +245,8 @@ func _make_hud() -> Control:
 	buttons["ITEMS"] = _button(root, "MOCHILA", Rect2(0, 0, 108, 49), "ITEMS")
 	buttons["CHAT"] = _button(root, "CHAT RP", Rect2(0, 0, 105, 49), "CHAT")
 	buttons["MENU"] = _button(root, "MENU", Rect2(0, 0, 103, 49), "MENU")
+	buttons["VOICE_CONNECT"] = _button(root, "VOZ", Rect2(0, 0, 108, 48), "VOICE_CONNECT")
+	buttons["VOICE_PTT"] = _button(root, "SEGURAR P/ FALAR", Rect2(0, 0, 156, 58), "VOICE_PTT")
 
 	chat_line = LineEdit.new()
 	chat_line.placeholder_text = "/ajuda ou mensagem local"
@@ -242,6 +260,8 @@ func _make_hud() -> Control:
 	var cross := _label(root, "+", Rect2(618, 331, 48, 48), 28)
 	cross.name = "Crosshair"
 	cross.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cross.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	crosshair_label = cross
 	return root
 
 func _progress(parent: Control, p: Vector2, color: Color) -> ProgressBar:
@@ -266,7 +286,7 @@ func _make_settings() -> Control:
 	dim.color = Color(0.0, 0.01, 0.03, 0.75)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(dim)
-	var p := _panel(root, Rect2(390, 164, 500, 390), Color(0.035, 0.06, 0.09, 0.98))
+	var p := _panel(root, Rect2(370, 90, 540, 515), Color(0.035, 0.06, 0.09, 0.98))
 	p.name = "SettingsCard"
 	_label(p, "CONFIGURAÇÕES", Rect2(28, 28, 430, 44), 27)
 	_label(p, "Gráficos", Rect2(28, 100, 420, 30), 19)
@@ -289,7 +309,16 @@ func _make_settings() -> Control:
 	mouse_opt.value = 1.0
 	mouse_opt.value_changed.connect(func(value: float): sensitivity_changed.emit(value))
 	p.add_child(mouse_opt)
-	_button(p, "VOLTAR", Rect2(27, 322, 445, 50), "CLOSE_SETTINGS")
+	_label(p, "Servidor VoIP experimental (wss://)", Rect2(28, 308, 480, 30), 18)
+	voice_input = LineEdit.new()
+	voice_input.position = Vector2(28, 343)
+	voice_input.size = Vector2(480, 46)
+	voice_input.placeholder_text = "wss://seu-servidor-de-voz.example"
+	voice_input.text_submitted.connect(func(value: String): voice_url_changed.emit(value.strip_edges()))
+	voice_input.focus_exited.connect(func(): voice_url_changed.emit(voice_input.text.strip_edges()))
+	p.add_child(voice_input)
+	_label(p, "Precisa de servidor próprio; não conecta ao SA-MP.", Rect2(28, 399, 478, 25), 14)
+	_button(p, "SALVAR E VOLTAR", Rect2(27, 440, 484, 52), "CLOSE_SETTINGS")
 	return root
 
 func _make_info_panel() -> Control:
@@ -330,15 +359,24 @@ func _submit_chat(text: String) -> void:
 	if t != "":
 		command_entered.emit(t)
 
-func update_hud(life: float, stamina_value: float, armour_value: float, money: int, location_name: String, ammo: int, reserve: int, is_car: bool, kmh: int, job_text: String) -> void:
+func update_hud(life: float, stamina_value: float, armour_value: float, money: int, location_name: String, ammo: int, reserve: int, is_car: bool, kmh: int, job_text: String, fuel_value: float = 0.0) -> void:
 	hp.value = life
 	stamina.value = stamina_value
 	armor.value = armour_value
 	location.text = location_name
 	cash_label.text = "R$ %d" % money
 	ammo_label.text = "PISTOLA • %d / %d" % [ammo, reserve]
-	speed_label.text = ("CARRO • %d KM/H" % kmh) if is_car else "A PÉ • LEXUS RP"
+	speed_label.text = ("CARRO • %d KM/H • %d%% combustível" % [kmh, int(fuel_value)]) if is_car else "A PÉ • LEXUS RP"
 	job_label.text = job_text
+
+func set_voice_status(value: String) -> void:
+	if voice_label != null:
+		voice_label.text = value
+
+func flash_reticle(hit: bool) -> void:
+	if crosshair_label != null:
+		crosshair_label.modulate = Color(0.22, 0.95, 0.30) if hit else Color(1.0, 0.55, 0.21)
+		reticle_timer = 0.13
 
 func update_minimap(pos: Vector3, angle: float, cars: Array, npcs: Array, driving: bool) -> void:
 	minimap.refresh(pos, angle, cars, npcs, driving)
@@ -389,6 +427,10 @@ func update_settings(level: int, camera_sens: float) -> void:
 	quality_opt.select(clampi(level, 0, 2))
 	mouse_opt.value = camera_sens
 
+func update_voice_url(value: String) -> void:
+	if voice_input != null:
+		voice_input.text = value
+
 func _relayout() -> void:
 	var vp := get_viewport().get_visible_rect().size
 	if vp == _last_size:
@@ -418,6 +460,7 @@ func _relayout() -> void:
 	ammo_label.position = Vector2(vp.x - 440, 62)
 	speed_label.position = Vector2(vp.x - 440, 103)
 	job_label.position = Vector2(vp.x - 440, 143)
+	voice_label.position = Vector2(vp.x - 440, 181)
 	alert_label.position = Vector2(vp.x * 0.34, 20)
 	toast.position = Vector2((vp.x - 610) * 0.5, 92)
 	var right := vp.x
@@ -431,6 +474,8 @@ func _relayout() -> void:
 	buttons["ITEMS"].position = Vector2(right - 332, bottom - 303)
 	buttons["CHAT"].position = Vector2(right - 450, bottom - 303)
 	buttons["MENU"].position = Vector2(390, 17)
+	buttons["VOICE_CONNECT"].position = Vector2(right - 572, bottom - 382)
+	buttons["VOICE_PTT"].position = Vector2(right - 572, bottom - 321)
 	chat_line.position = Vector2((vp.x - 480) * 0.5, bottom - 82)
 	var cross := hud.get_node("Crosshair") as Label
 	cross.position = (vp - cross.size) * 0.5

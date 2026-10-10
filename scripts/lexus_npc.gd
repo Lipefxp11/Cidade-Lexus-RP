@@ -48,7 +48,7 @@ func simulate(delta: float, player_pos: Vector3, player_alive: bool, player_in_c
 			if attack_timer <= 0.0:
 				attack_timer = 1.25
 				return 7.0
-	visual.update_pose(delta, 0.0, false, hostile)
+	visual.update_pose(delta, 0.0, false, hostile, 0.0)
 	return 0.0
 
 func take_hit(damage: float) -> bool:
