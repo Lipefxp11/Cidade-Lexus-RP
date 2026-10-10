@@ -1,11 +1,18 @@
-# Cidade Lexus RP — Avatar Oficial V17
+# Cidade Lexus RP — Protagonista Lexus Urbano 02 (V23)
 
-`character.glb` é o personagem **Lexus Urbano 01**, incluído na source e no APK.
-Tem aproximadamente 1,82 m no jogo, rosto com olhos, nariz e boca, cabelo prateado, tatuagens, corrente, camiseta LX, calça cargo, tênis, mãos e acessórios.
+O arquivo `character.glb` é o **novo personagem jogável**, feito para esta source.
+É um humanoide 3D autoral com geometria orgânica, rosto trabalhado, olhos e cabelo,
+barba curta, camisa urbana Lexus, calça cargo, tênis e mãos com dedos.
 
-O humanoide usa nós hierárquicos nomeados `LexusLeftLeg`, `LexusRightArm` e equivalentes.
-O script `scripts/humanoid.gd` controla animações procedurais de parado, andar, correr, agachar, pular, mirar, recuo e queda. Não é um rig humanoide completo com movimentos capturados; esse é o próximo passo para fotorealismo.
+- Incluído no APK (sem precisar de internet para baixar o personagem).
+- Articulações GLB `LexusRig`, `LexusHips`, `LexusChest`, `LexusHead`,
+  `LexusLeftArm`, `LexusRightArm`, `LexusLeftLeg`, `LexusRightLeg`, etc.
+- A movimentação existente é **procedural por articulações**, não captura
+  profissional de movimento ou skinning por ossos.
+- Loja de skins e personalização continuam compatíveis.
+- O modelo anterior V17 foi substituído neste caminho.
 
-Se o importador Godot não carregar o GLB, o script usa um personagem simples alternativo para não bloquear o APK.
-
-A V17 mantém a Godot 4.4.1 / Android (renderização GL Compatibility).
+**Limite de realismo:** o novo modelo é estilizado-realista. Para visual
+comparável ao GTA V/FiveM, será necessário um humano escaneado/texturizado,
+com rig humano completo, animações próprias e licença adequada. Não há modelo
+externo obrigatório na compilação.

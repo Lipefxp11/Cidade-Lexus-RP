@@ -1,10 +1,6 @@
-CIDADE LEXUS RP — PERSONAGEM OFICIAL LEXUS URBANO 01
+CIDADE LEXUS RP — PERSONAGEM LEXUS URBANO 02 (V23)
 
-O modelo character.glb foi criado especificamente para este projeto
-com geometria original gerada por código (trimesh).
-Não contém personagens ou texturas provenientes de jogos comerciais
-nem modelos externos protegidos.
-
-O avatar é uma versão estilizada com proporções humanas e rig
-procedural: não é uma digitalização fotográfica de uma pessoa real.
-O arquivo GLB está incluído no APK; não exige download adicional.
+GLB original criado por script paramétrico para este projeto.
+Não foi extraído de GTA, SA-MP, FiveM ou outro jogo comercial.
+Não é um escaneamento fotográfico de uma pessoa real.
+Incluído na source, sem necessidade de download remoto.

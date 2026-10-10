@@ -1,4 +1,4 @@
-name: Cidade Lexus RP V21 - Tres Cidades Android Build
+name: Cidade Lexus RP V22 - Android Multiplayer Cliente
 
 on:
   push:
@@ -49,6 +49,13 @@ jobs:
       - name: V18 static project validation
         run: |
           python3 tests/v18_static_check.py
+      - name: Verify V22 multiplayer scripts and Android Internet permission
+        run: |
+          python3 tests/v22_multiplayer_static.py
+      - name: Test Discloud protocol validators (Node built-ins)
+        run: |
+          node --check server_discloud/index.js
+          node --test server_discloud/tests/*.test.js
       - name: Verify landscape settings and script syntax
         run: |
           set -e
@@ -86,6 +93,13 @@ jobs:
         run: |
           set -o pipefail
           godot --headless --path . --editor --quit 2>&1 | tee build/logs/editor_import.log
+      - name: Smoke test V22 WebSocket client state
+        run: |
+          set -o pipefail
+          godot --headless --path . --script res://tests/v22_network_smoke.gd 2>&1 | tee build/logs/v22_network_smoke.log
+          if grep -Eiq 'V22 NETWORK ERROR|SCRIPT ERROR|Parse Error|Failed to load script|Invalid call' build/logs/v22_network_smoke.log; then
+            exit 1
+          fi
       - name: Verify interactive menu actions
         run: |
           set -o pipefail
@@ -109,6 +123,13 @@ jobs:
           godot --headless --path . --script res://tests/v17_character_smoke.gd 2>&1 | tee build/logs/v17_character.log
           if grep -Eiq 'SCRIPT ERROR|Parse Error|Failed to load script|V17 character:' build/logs/v17_character.log; then
             echo 'O modelo oficial nao carregou corretamente. Verifique v17_character.log.'
+            exit 1
+          fi
+      - name: Validate V23 playable protagonist model
+        run: |
+          set -o pipefail
+          godot --headless --path . --script res://tests/v23_character_smoke.gd 2>&1 | tee build/logs/v23_character_smoke.log
+          if grep -Eiq 'V23 ERROR|SCRIPT ERROR|Parse Error|Failed to load script|Invalid call' build/logs/v23_character_smoke.log; then
             exit 1
           fi
       - name: Validate V18 favela, vehicle and interaction systems
@@ -188,19 +209,19 @@ jobs:
         run: |
           mkdir -p build
           godot --headless --path . --editor --quit
-          godot --headless --verbose --path . --export-debug Android build/CidadeLexus-V21-debug.apk
-          test -s build/CidadeLexus-V21-debug.apk
+          godot --headless --verbose --path . --export-debug Android build/CidadeLexus-V22-debug.apk
+          test -s build/CidadeLexus-V22-debug.apk
       - name: Upload Godot diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: CidadeLexus-V21-logs
+          name: CidadeLexus-V22-logs
           path: build/logs/*.log
           if-no-files-found: warn
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: CidadeLexus-V21-Android-APK
-          path: build/CidadeLexus-V21-debug.apk
+          name: CidadeLexus-V22-Android-APK
+          path: build/CidadeLexus-V22-debug.apk
           if-no-files-found: error

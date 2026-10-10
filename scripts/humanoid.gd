@@ -1,6 +1,7 @@
 extends Node3D
 
-# Official Cidade Lexus character: original GLB bundled in the APK, joint-driven procedural animation.
+# Cidade Lexus RP V23: avatar novo Lexus Urbano 02, GLB autoral incluso no APK.
+# Juntas hierarquicas preservadas para compatibilidade com andar, correr, mirar e agachar.
 # Primitive fallback only if importing the packaged GLB fails.
 const Visuals = preload("res://scripts/visuals.gd")
 var hips: Node3D
@@ -16,6 +17,7 @@ var animation_phase: float = 0.0
 var crouched: float = 0.0
 var body_skin: Color = Color(0.74, 0.51, 0.37)
 var imported_model: Node3D
+var character_version: String = "LEXUS_URBANO_02"
 var imported_animation: AnimationPlayer
 var last_imported_animation := ""
 var imported_parts: Dictionary = {}
@@ -44,11 +46,9 @@ const HAIR_TONES = [
 ]
 
 func _ready() -> void:
-	# V20: skinned model is OPTIONAL. The APK always bundles the original Lexus GLB.
-	# A user-owned, correctly licensed animated GLB can be added at this path.
-	if _try_realistic_character():
-		return
-	# The official playable character is packaged with the APK; no external download.
+	# V23: use the NEW bundled Lexus Urbano 02 character first, even if older
+	# hero_realistic.glb remains from previous versions. Never silently load an
+	# outdated prototype as the main player. The model is available offline.
 	var model_path := "res://assets/models/character.glb"
 	if ResourceLoader.exists(model_path):
 		var packed: PackedScene = load(model_path) as PackedScene
@@ -56,8 +56,8 @@ func _ready() -> void:
 			imported_model = packed.instantiate() as Node3D
 			if imported_model != null:
 				add_child(imported_model)
-				imported_model.scale = Vector3.ONE * 0.935
-				imported_model.position.y = 0.062
+				imported_model.scale = Vector3.ONE * 0.94
+				imported_model.position.y = 0.042
 				var names := [
 					"LexusRig", "LexusHips", "LexusChest", "LexusHead",
 					"LexusLeftArm", "LexusRightArm", "LexusLeftForearm", "LexusRightForearm",
@@ -378,9 +378,9 @@ func set_outfit(style: int) -> void:
 				continue
 			var node_name := mesh_node.name.to_lower()
 			var chosen_color: Color
-			if "urban_shirt" in node_name or "upper_chest" in node_name:
+			if "urban_shirt" in node_name or "shirt_sleeve" in node_name:
 				chosen_color = shirt_color
-			elif "tailored_hips" in node_name or "thigh" in node_name or "_shin" in node_name or "cargo_pocket" in node_name:
+			elif "tailored_hips" in node_name or "thigh" in node_name or "shin_" in node_name or "cargo_pocket" in node_name:
 				chosen_color = trousers_color
 			else:
 				continue
@@ -415,10 +415,10 @@ func apply_appearance(outfit: int, skin_tone: int, hair_tone: int) -> void:
 			var nm := part.name.to_lower()
 			var color := Color.WHITE
 			var tint := false
-			if "hair" in nm or "curl_" in nm or "brow_" in nm:
+			if "hair" in nm or "brow_" in nm:
 				color = HAIR_TONES[hair_style_index]
 				tint = true
-			elif "face_" in nm or "jaw" in nm or "nose_" in nm or "cheek_" in nm or "neck" in nm or "ear_" in nm or "upper_arm" in nm or "forearm" in nm or "hand_shape" in nm or "finger_" in nm:
+			elif "face_" in nm or "jaw" in nm or "nose_" in nm or "cheek_" in nm or "neck" in nm or "ear_" in nm or "upper_arm" in nm or "forearm" in nm or "hand_shape" in nm or "finger_" in nm or "thumb_" in nm:
 				# Avoid recoloring tattoos and shirt geometry.
 				if "tattoo" not in nm and "seam" not in nm:
 					color = SKIN_TONES[skin_tone_index]
