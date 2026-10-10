@@ -23,4 +23,4 @@ textures/vram_compression/import_etc2_astc=true
 common/physics_ticks_per_second=60
 
 [input_devices]
-pointing/emulate_mouse_from_touch=false
+pointing/emulate_mouse_from_touch=true

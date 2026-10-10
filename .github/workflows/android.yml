@@ -58,6 +58,7 @@ jobs:
           assert 'window/size/viewport_width=1280' in config
           assert 'window/size/viewport_height=720' in config
           assert not list(Path('scripts').rglob('*.gd')) == [], 'Scripts nao encontrados'
+          assert 'pointing/emulate_mouse_from_touch=true' in config, 'Botao Android requer touch mouse emulation'
           for script in Path('scripts').rglob('*.gd'):
               text = script.read_text()
               if re.search(r'(?m)^\s*const\s+\w+\s*:=', text):
@@ -74,6 +75,10 @@ jobs:
         run: |
           set -o pipefail
           godot --headless --path . --editor --quit 2>&1 | tee build/logs/editor_import.log
+      - name: Verify interactive menu actions
+        run: |
+          set -o pipefail
+          godot --headless --path . --script res://tests/ui_signal_smoke.gd 2>&1 | tee build/logs/menu_input_smoke.log
       - name: Smoke test boot menu (headless)
         run: |
           set -o pipefail
@@ -135,8 +140,8 @@ jobs:
         run: |
           mkdir -p build
           godot --headless --path . --editor --quit
-          godot --headless --verbose --path . --export-debug Android build/CidadeLexus-V14-debug.apk
-          test -s build/CidadeLexus-V14-debug.apk
+          godot --headless --verbose --path . --export-debug Android build/CidadeLexus-V15-debug.apk
+          test -s build/CidadeLexus-V15-debug.apk
       - name: Upload Godot diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -149,5 +154,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: CidadeLexus-V14-Android-APK
-          path: build/CidadeLexus-V14-debug.apk
+          path: build/CidadeLexus-V15-debug.apk
           if-no-files-found: error

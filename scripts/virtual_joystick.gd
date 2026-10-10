@@ -35,7 +35,7 @@ func _gui_input(event: InputEvent) -> void:
 		if ev.index == touch_id:
 			_update_dir(ev.position)
 			accept_event()
-	elif event is InputEventMouseButton:
+	elif event is InputEventMouseButton and OS.get_name() != "Android":
 		var ev := event as InputEventMouseButton
 		if ev.button_index == MOUSE_BUTTON_LEFT:
 			dragging_mouse = ev.pressed
@@ -44,7 +44,7 @@ func _gui_input(event: InputEvent) -> void:
 			else:
 				_reset()
 			accept_event()
-	elif event is InputEventMouseMotion and dragging_mouse:
+	elif event is InputEventMouseMotion and dragging_mouse and OS.get_name() != "Android":
 		var ev := event as InputEventMouseMotion
 		_update_dir(ev.position)
 		accept_event()

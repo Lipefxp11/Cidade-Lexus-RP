@@ -1,6 +1,6 @@
 extends Node3D
 
-# CIDADE LEXUS RP V13 — offline vertical slice.
+# CIDADE LEXUS RP V15 — interface touchscreen revisada / demo offline.
 # Gameplay remains local until an authoritative multiplayer backend exists.
 const WorldScript = preload("res://scripts/city_world.gd")
 const PlayerScript = preload("res://scripts/lexus_player.gd")
@@ -53,6 +53,8 @@ var hud_tick := 0.0
 var setting_save_timer := 0.0
 
 func _ready() -> void:
+	# Android UI buttons depend on mouse-from-touch input emulation.
+	Input.emulate_mouse_from_touch = true
 	# Force portrait-locked Android phones to use landscape while our APK is active.
 	if OS.get_name() == "Android":
 		DisplayServer.screen_set_orientation(DisplayServer.SCREEN_LANDSCAPE)
@@ -302,7 +304,7 @@ func _start_playing() -> void:
 	state = GameState.PLAYING
 	_set_game_world_visible(true)
 	ui.set_screen("game")
-	ui.show_toast("Cidade Lexus RP V13 • DEMO OFFLINE")
+	ui.show_toast("Cidade Lexus RP V15 • DEMO OFFLINE")
 	_refresh_hud()
 
 func _set_game_world_visible(value: bool) -> void:
@@ -536,7 +538,7 @@ func _on_chat_command(line: String) -> void:
 	var command := line.to_lower().strip_edges()
 	match command:
 		"/ajuda":
-			ui.open_info("COMANDOS RP OFFLINE\n/rg  /saldo  /inventario  /gps\n/trabalho  /curar  /comprarmunicao\n/recarregar  /carro\n\nCONTROLES: joystick andar, deslize o dedo na área livre à direita para câmera 360°. USAR entra/sai do carro.\n\nTudo nesta V13 é demonstração local.")
+			ui.open_info("COMANDOS RP OFFLINE\n/rg  /saldo  /inventario  /gps\n/trabalho  /curar  /comprarmunicao\n/recarregar  /carro\n\nCONTROLES: joystick andar, deslize o dedo na área livre à direita para câmera 360°. USAR entra/sai do carro.\n\nTudo nesta V15 é demonstração local.")
 		"/rg":
 			ui.open_info("REGISTRO GERAL\nNome: Cidadão Lexus\nCidade: Cidade Lexus RP\nOcupação: Trabalhador\nNível: %d\nMultiplayer: NÃO CONECTADO" % int(points / 100 + 1))
 		"/saldo":

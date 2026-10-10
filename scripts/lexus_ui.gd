@@ -40,6 +40,9 @@ var mouse_opt: HSlider
 var main_title: Label
 var server_opt: OptionButton
 var _last_size := Vector2.ZERO
+var shade: ColorRect
+var play_btn: Button
+var settings_btn: Button
 
 func _ready() -> void:
 	menu = _make_menu()
@@ -58,10 +61,10 @@ func _process(delta: float) -> void:
 		if toast_time <= 0.0:
 			toast.visible = false
 
-func _root() -> Control:
+func _root(interactive: bool = false) -> Control:
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.mouse_filter = Control.MOUSE_FILTER_PASS if interactive else Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	return root
 
@@ -77,7 +80,7 @@ func _panel(parent: Control, rect: Rect2, color: Color = Color(0.03, 0.06, 0.10,
 	var p := Panel.new()
 	p.position = rect.position
 	p.size = rect.size
-	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.mouse_filter = Control.MOUSE_FILTER_PASS
 	p.add_theme_stylebox_override("panel", _style(color))
 	parent.add_child(p)
 	return p
@@ -97,12 +100,16 @@ func _label(parent: Control, value: String, rect: Rect2, font_size: int = 18) ->
 func _button(parent: Control, label_text: String, rect: Rect2, action: String, highlight: bool = false) -> Button:
 	var b := Button.new()
 	b.text = label_text
+	b.mouse_filter = Control.MOUSE_FILTER_STOP
+	b.focus_mode = Control.FOCUS_ALL
+	b.action_mode = BaseButton.ACTION_MODE_BUTTON_RELEASE
 	b.position = rect.position
 	b.size = rect.size
 	b.add_theme_font_size_override("font_size", 18)
 	b.add_theme_stylebox_override("normal", _style(Color(0.61, 0.06, 0.11, 0.95) if highlight else Color(0.04, 0.08, 0.13, 0.82)))
 	b.add_theme_stylebox_override("hover", _style(Color(0.80, 0.11, 0.17, 1.0)))
 	b.add_theme_stylebox_override("pressed", _style(Color(0.35, 0.07, 0.11, 1.0)))
+	b.add_theme_stylebox_override("focus", _style(Color(0.0, 0.0, 0.0, 0.0), Color(1.0, 0.38, 0.38), 13))
 	parent.add_child(b)
 	if action != "":
 		b.pressed.connect(func(): action_pressed.emit(action))
@@ -124,28 +131,45 @@ func _background(parent: Control) -> void:
 	parent.add_child(dim)
 
 func _make_menu() -> Control:
-	var root := _root()
+	# An interactive Control root makes touch propagation explicit.
+	var root := _root(true)
 	_background(root)
-	var card := _panel(root, Rect2(44, 54, 520, 614), Color(0.02, 0.055, 0.09, 0.92))
+
+	# The reference image contained an old blue Google sign-in button.
+	# An opaque left-side shade hides this obsolete element without modifying the image.
+	shade = ColorRect.new()
+	shade.name = "MenuShade"
+	shade.position = Vector2.ZERO
+	shade.size = Vector2(660, 720)
+	shade.color = Color(0.015, 0.028, 0.055, 0.97)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(shade)
+
+	var card := _panel(root, Rect2(48, 54, 520, 590), Color(0.018, 0.043, 0.072, 0.97))
 	card.name = "MenuCard"
-	_label(card, "CIDADE LEXUS RP", Rect2(28, 28, 450, 42), 28)
-	main_title = _label(card, "SUA NOVA HISTÓRIA COMEÇA AQUI", Rect2(28, 91, 470, 90), 31)
-	_label(card, "BRASIL • RIO DE JANEIRO • V13", Rect2(28, 176, 470, 32), 17)
-	_label(card, "SERVIDOR", Rect2(28, 236, 440, 28), 16)
+	_label(card, "CIDADE LEXUS RP", Rect2(27, 25, 462, 43), 29)
+	main_title = _label(card, "SUA CIDADE. SUA HISTÓRIA.", Rect2(27, 88, 460, 73), 29)
+	_label(card, "BRASIL  /  RIO DE JANEIRO  /  V15", Rect2(27, 180, 464, 27), 16)
+	_label(card, "ESCOLHA O SERVIDOR", Rect2(27, 237, 462, 28), 16)
+
 	server_opt = OptionButton.new()
-	server_opt.position = Vector2(28, 268)
-	server_opt.size = Vector2(464, 49)
-	server_opt.add_item("CIDADE LEXUS • DEMO OFFLINE")
-	server_opt.add_item("Servidor 01 • Em desenvolvimento")
-	server_opt.add_item("Servidor 02 • Em desenvolvimento")
-	server_opt.set_item_disabled(1, true)
-	server_opt.set_item_disabled(2, true)
+	server_opt.name = "ServerSelector"
+	server_opt.position = Vector2(27, 270)
+	server_opt.size = Vector2(465, 52)
+	server_opt.mouse_filter = Control.MOUSE_FILTER_STOP
+	server_opt.add_item("CIDADE LEXUS  •  DEMO OFFLINE")
+	server_opt.select(0)
+	server_opt.add_theme_font_size_override("font_size", 17)
+	server_opt.add_theme_stylebox_override("normal", _style(Color(0.08, 0.10, 0.15, 0.98)))
 	card.add_child(server_opt)
-	_label(card, "O multiplayer ainda não está conectado. Esta build é jogável localmente.", Rect2(28, 326, 460, 48), 16)
-	var play := _button(card, "JOGAR  →", Rect2(28, 390, 464, 72), "PLAY", true)
-	play.add_theme_font_size_override("font_size", 28)
-	_button(card, "CONFIGURAÇÕES", Rect2(28, 478, 464, 52), "SETTINGS")
-	_label(card, "Motor Godot 4.4.1  |  Android horizontal  |  Protótipo offline", Rect2(28, 554, 460, 42), 14)
+
+	_label(card, "Modo local disponível. O multiplayer ainda está em desenvolvimento.", Rect2(27, 332, 460, 46), 15)
+	play_btn = _button(card, "JOGAR", Rect2(27, 397, 465, 72), "PLAY", true)
+	play_btn.name = "PlayButton"
+	play_btn.add_theme_font_size_override("font_size", 29)
+	settings_btn = _button(card, "CONFIGURAÇÕES", Rect2(27, 484, 465, 58), "SETTINGS")
+	settings_btn.name = "SettingsButton"
+	_label(card, "ANDROID  •  HORIZONTAL  •  PROTÓTIPO OFFLINE", Rect2(27, 553, 464, 25), 13)
 	return root
 
 func _make_loading() -> Control:
@@ -235,7 +259,7 @@ func _progress(parent: Control, p: Vector2, color: Color) -> ProgressBar:
 	return bar
 
 func _make_settings() -> Control:
-	var root := _root()
+	var root := _root(true)
 	root.visible = false
 	var dim := ColorRect.new()
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -269,7 +293,7 @@ func _make_settings() -> Control:
 	return root
 
 func _make_info_panel() -> Control:
-	var root := _root()
+	var root := _root(true)
 	root.visible = false
 	var dim := ColorRect.new()
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -285,7 +309,7 @@ func _make_info_panel() -> Control:
 	return root
 
 func _make_death_panel() -> Control:
-	var root := _root()
+	var root := _root(true)
 	root.visible = false
 	var dim := ColorRect.new()
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -371,15 +395,23 @@ func _relayout() -> void:
 		return
 	_last_size = vp
 	var menucard := menu.get_node("MenuCard") as Panel
-	menucard.position = Vector2(maxf(20.0, vp.x * 0.035), maxf(20.0, (vp.y - menucard.size.y) * 0.5))
+	var menu_scale := minf(1.0, minf((vp.y - 28.0) / 590.0, (vp.x * 0.75 - 30.0) / 520.0))
+	menu_scale = maxf(0.40, menu_scale)
+	menucard.scale = Vector2.ONE * menu_scale
+	menucard.position = Vector2(maxf(14.0, vp.x * 0.034), (vp.y - 590.0 * menu_scale) * 0.5)
+	shade.size = Vector2(minf(vp.x, menucard.position.x + 520.0 * menu_scale + 46.0), vp.y)
 	var loading_card := loading.get_node("LoadingCard") as Panel
-	loading_card.position = (vp - loading_card.size) * 0.5
+	loading_card.scale = Vector2.ONE * minf(1.0, minf((vp.x - 24.0) / loading_card.size.x, (vp.y - 24.0) / loading_card.size.y))
+	loading_card.position = (vp - loading_card.size * loading_card.scale) * 0.5
 	var settings_card := settings_panel.get_node("SettingsCard") as Panel
-	settings_card.position = (vp - settings_card.size) * 0.5
+	settings_card.scale = Vector2.ONE * minf(1.0, minf((vp.x - 24.0) / settings_card.size.x, (vp.y - 24.0) / settings_card.size.y))
+	settings_card.position = (vp - settings_card.size * settings_card.scale) * 0.5
 	var info_card := info_panel.get_node("InfoCard") as Panel
-	info_card.position = (vp - info_card.size) * 0.5
+	info_card.scale = Vector2.ONE * minf(1.0, minf((vp.x - 24.0) / info_card.size.x, (vp.y - 24.0) / info_card.size.y))
+	info_card.position = (vp - info_card.size * info_card.scale) * 0.5
 	var death_card := death_panel.get_node("DeathCard") as Panel
-	death_card.position = (vp - death_card.size) * 0.5
+	death_card.scale = Vector2.ONE * minf(1.0, minf((vp.x - 24.0) / death_card.size.x, (vp.y - 24.0) / death_card.size.y))
+	death_card.position = (vp - death_card.size * death_card.scale) * 0.5
 	movement.position = Vector2(20, vp.y - 210)
 	minimap.position = Vector2(vp.x - 188, 12)
 	cash_label.position = Vector2(vp.x - 440, 19)
