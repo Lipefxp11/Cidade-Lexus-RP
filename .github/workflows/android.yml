@@ -46,8 +46,42 @@ jobs:
       - name: Create debug signing key
         run: |
           keytool -genkeypair -noprompt -keystore "$RUNNER_TEMP/lexus-debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Cidade Lexus,O=Development,C=BR'
+      - name: Verify landscape settings and script syntax
+        run: |
+          set -e
+          mkdir -p build/logs
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import re
+          config = Path('project.godot').read_text()
+          assert 'window/handheld/orientation=0' in config, 'O projeto nao esta em landscape'
+          assert 'window/size/viewport_width=1280' in config
+          assert 'window/size/viewport_height=720' in config
+          assert not list(Path('scripts').rglob('*.gd')) == [], 'Scripts nao encontrados'
+          for script in Path('scripts').rglob('*.gd'):
+              text = script.read_text()
+              if re.search(r'(?m)^\s*const\s+\w+\s*:=', text):
+                  raise SystemExit('Sintaxe incorreta de constante: ' + str(script))
+          print('Configuracao horizontal e verificacoes basicas: OK')
+          PYCODE
+          set -o pipefail
+          godot --headless --path . --check-only --script res://scripts/main.gd 2>&1 | tee build/logs/script_check.log
+          if grep -Eiq 'SCRIPT ERROR|Parse Error|Failed to load script|Cannot infer the type|Invalid (set|get|call)' build/logs/script_check.log; then
+            echo 'Foi encontrado erro de parser GDScript. Veja script_check.log.'
+            exit 1
+          fi
       - name: Import Godot project
-        run: godot --headless --path . --editor --quit
+        run: |
+          set -o pipefail
+          godot --headless --path . --editor --quit 2>&1 | tee build/logs/editor_import.log
+      - name: Smoke test boot menu (headless)
+        run: |
+          set -o pipefail
+          godot --headless --path . --quit-after 90 2>&1 | tee build/logs/startup.log
+          if grep -Eiq 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Cannot infer the type' build/logs/startup.log; then
+            echo 'Erro de script detectado. Consulte os logs anexados.'
+            exit 1
+          fi
       - name: Configure export after editor initialization
         env:
           LEXUS_KEYSTORE: ${{ runner.temp }}/lexus-debug.keystore
@@ -101,12 +135,19 @@ jobs:
         run: |
           mkdir -p build
           godot --headless --path . --editor --quit
-          godot --headless --verbose --path . --export-debug Android build/CidadeLexus-debug.apk
-          test -s build/CidadeLexus-debug.apk
+          godot --headless --verbose --path . --export-debug Android build/CidadeLexus-V14-debug.apk
+          test -s build/CidadeLexus-V14-debug.apk
+      - name: Upload Godot diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CidadeLexus-V14-logs
+          path: build/logs/*.log
+          if-no-files-found: warn
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: CidadeLexus-V001-Android-APK
-          path: build/CidadeLexus-debug.apk
+          name: CidadeLexus-V14-Android-APK
+          path: build/CidadeLexus-V14-debug.apk
           if-no-files-found: error

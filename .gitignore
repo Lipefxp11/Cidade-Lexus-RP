@@ -1,4 +1,7 @@
+# Godot cache and export output
 .godot/
 build/
 *.apk
 *.aab
+*.tmp
+.DS_Store
